@@ -13,6 +13,7 @@ class ChatServer < EM::Connection
 
   def post_init
     @port, @ip = Socket.unpack_sockaddr_in(get_peername)
+    @username = nil
     puts "A client #{@ip}:#{@port} has connected..."
 
     ask_username
@@ -35,17 +36,32 @@ class ChatServer < EM::Connection
   # Message handling
   #
 
-  private
-
   def handle_chat_message(msg)
-    raise NotImplementedError
+    if command?(msg)
+      self.handle_command(msg)
+    else
+      self.announce(msg, "#{@username}:")
+    end
+  end
+
+  #
+  # Commands handling
+  #
+
+  def command?(input)
+    input =~ /exit$/i
+  end
+
+  def handle_command(cmd)
+    case cmd
+      when /exit$/i then
+        self.close_connection
+    end
   end
 
   #
   # Username handling
   #
-
-  private
 
   def entered_username?
     !@username.nil? && !@username.empty?
@@ -58,7 +74,7 @@ class ChatServer < EM::Connection
     else
       @username = input
       @@connections << self
-      other_peers.each { |c| c.send_data("#{@username} has joined the room\n") }
+      announce "#{@username} has joined the room\n"
       puts "A client #{@ip}:#{@port} has joined as #{@username}"
       send_line("[info] Ohai, #{@username}")
     end
@@ -72,13 +88,13 @@ class ChatServer < EM::Connection
   # Helpers
   #
 
-  private
+  def announce(msg = nil, prefix = '[server]')
+    @@connections.each { |c| c.send_line("#{prefix} #{msg}") } unless msg.empty?
+  end
 
   def other_peers
     @@connections.reject { |c| self == c }
   end
-
-  public
 
   def send_line(line)
     self.send_data "#{line}\n"
