@@ -2,10 +2,12 @@ require 'rubygems' # or use Bundler.setup
 require 'eventmachine'
 
 class ChatServer < EM::Connection
-
   attr_reader :ip, :port, :username
 
+  DM_REGEXP = /^@([a-zA-Z0-9]+)\s*:?\s+(.+)/.freeze
+
   @@connections = Array.new
+
 
   #
   # EventMachine handlers
@@ -40,8 +42,30 @@ class ChatServer < EM::Connection
     if command?(msg)
       self.handle_command(msg)
     else
-      self.announce(msg, "#{@username}:")
+      if direct_message?(msg)
+        self.handle_direct_message(msg)
+      else
+        self.announce(msg, "#{@username}:")
+      end
     end
+  end
+
+  def handle_direct_message(input)
+    username, message = parse_direct_message(input)
+    if connection = @@connections.find { |c| c.username == username }
+      puts "[dm] @#{@username} => @#{username}"
+      connection.send_line("[dm] @#{@username}: #{message}")
+    else
+      send_line "@#{username} is not in the room. Here's who is: #{usernames.join(', ')}"
+    end
+  end
+
+  def direct_message?(input)
+    input =~ DM_REGEXP
+  end
+
+  def parse_direct_message(input)
+    return [$1, $2] if input =~ DM_REGEXP
   end
 
   #
@@ -74,7 +98,7 @@ class ChatServer < EM::Connection
     else
       @username = input
       @@connections << self
-      announce "#{@username} has joined the room\n"
+      announce "#{@username} has joined the room"
       puts "A client #{@ip}:#{@port} has joined as #{@username}"
       send_line("[info] Ohai, #{@username}")
     end
@@ -98,6 +122,10 @@ class ChatServer < EM::Connection
 
   def send_line(line)
     self.send_data "#{line}\n"
+  end
+
+  def usernames
+    @@connections.map { |c| c.username }
   end
 
 end
