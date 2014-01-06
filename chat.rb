@@ -73,13 +73,15 @@ class ChatServer < EM::Connection
   #
 
   def command?(input)
-    input =~ /exit$/i
+    input =~ /(exit|status)$/i
   end
 
   def handle_command(cmd)
     case cmd
       when /exit$/i then
         self.close_connection
+      when /status$/i then
+        self.send_line("[chat server] It's #{Time.now.strftime('%H:%M')} and there are #{self.number_of_connected_clients} people in the room")
     end
   end
 
@@ -126,6 +128,10 @@ class ChatServer < EM::Connection
 
   def usernames
     @@connections.map { |c| c.username }
+  end
+
+  def number_of_connected_clients
+    @@connections.size
   end
 
 end
